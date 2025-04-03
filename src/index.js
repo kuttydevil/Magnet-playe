@@ -1,51 +1,46 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ReactDOM from 'react-dom/client'; // Use createRoot for React 18+
+import ReactDOM from 'react-dom'; // Reverted for older React compatibility
 
 // ========================================================================
 // WARNING: Placeholder for the WebTorrent Client Setup
 // ========================================================================
-// This is the most critical part. In a real setup, this import MUST
-// resolve to a file (like the 'webtorrent-internal.js' from the Vue example)
-// that correctly initializes the WebTorrent client using the EXACT source
-// code provided in your JSON, likely placed in a 'src/lib' directory and
-// processed by a build tool (Webpack/Vite) with Node.js polyfills.
-// The 'require' calls below WILL FAIL without a proper build environment.
+// This section remains a placeholder. The real implementation requires
+// placing the provided source code (webtorrent, bittorrent-tracker, etc.)
+// into a 'src/lib'-like structure and using a build tool (Webpack/Vite/Parcel)
+// configured with Node.js polyfills to handle the imports and dependencies.
+// The 'require' or 'import' calls for the actual client WILL FAIL without this setup.
 
 /*
 // --- START: Conceptual Import (Requires Build Tool & src/lib setup) ---
-import { WebtorrentClient, Torrent } from './lib-placeholder/webtorrent-internal'; // Adjust path based on actual setup
+import { WebtorrentClient, Torrent } from './lib-placeholder/webtorrent-internal'; // Adjust path
 // --- END: Conceptual Import ---
 */
 
 // --- START: Mock Client for Demonstration ---
-// Using mocks so the React structure runs without the real libs/build tool
 const mockTrackerEventTarget = { addListener: () => {}, removeListener: () => {} };
 const mockDiscovery = { tracker: { _trackers: [ { announceUrl: 'wss://mock-tracker.com', ...mockTrackerEventTarget } ] } };
 const mockTorrentInstance = {
     infoHash: 'MOCK_INFO_HASH_1234567890abcdef',
     magnetURI: 'magnet:?xt=urn:btih:MOCK_INFO_HASH_1234567890abcdef',
     discovery: mockDiscovery,
-    // Mock event emitter methods
     addListener: (event, handler) => { console.log(`Mock AddListener: ${event}`); },
     removeListener: (event, handler) => { console.log(`Mock RemoveListener: ${event}`); },
-    // Add other methods/properties used by listeners if needed for demo
 };
 const WebtorrentClient = {
-    add: (magnetLink, opts) => {
+    add: async (magnetLink, opts) => { // Make mock async to match real usage
         console.log("Mock WebtorrentClient.add called with:", magnetLink);
-        // Return a mock torrent instance after a delay
-        return new Promise(resolve => setTimeout(() => resolve(mockTorrentInstance), 500));
+        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate async
+        return mockTorrentInstance;
     },
     remove: (infoHash, cb) => {
         console.log("Mock WebtorrentClient.remove called for:", infoHash);
-        setTimeout(() => cb && cb(), 100); // Simulate async removal
+        setTimeout(() => cb && cb(), 100);
     }
 };
 // --- END: Mock Client ---
 
-
 // ========================================================================
-// Utility Functions (Can be moved to separate file in real app)
+// Utility Functions
 // ========================================================================
 
 const formatTime = (timestamp) => {
@@ -57,8 +52,10 @@ const formatTime = (timestamp) => {
   }
 };
 
+// *** MODIFIED FOR OLDER JS ENVIRONMENTS ***
 const getStatusClass = (status) => {
-  switch (status?.toLowerCase()) {
+  const lowerStatus = status && typeof status === 'string' ? status.toLowerCase() : ''; // Replaced optional chaining
+  switch (lowerStatus) {
     case 'connected': return 'dot-connected';
     case 'connecting': return 'dot-connecting';
     case 'error': return 'dot-error';
@@ -76,9 +73,8 @@ const formatPeerId = (id) => {
   return id || 'N/A';
 };
 
-
 // ========================================================================
-// React Components (Can be moved to separate files in real app)
+// React Components
 // ========================================================================
 
 function TorrentInput({ onStartMonitoring, disabled }) {
@@ -132,13 +128,13 @@ function TrackerList({ trackers }) {
                 <strong style={styles.url}>{url}</strong>
               </div>
               <div style={styles.details}>
-                Status: <span className={tracker.status}>{tracker.status}</span>
+                Status: <span className={tracker.status || 'unknown'}>{tracker.status || 'unknown'}</span>
                 {(tracker.status === 'connected' || tracker.peers !== undefined) && (
-                    <>
+                    <React.Fragment>
                         {tracker.peers !== undefined && <span style={styles.info}> | Peers: {tracker.peers}</span>}
                         {tracker.seeders !== undefined && <span style={styles.info}> | Seeds: {tracker.seeders}</span>}
                         {tracker.leechers !== undefined && <span style={styles.info}> | Leeches: {tracker.leechers}</span>}
-                    </>
+                    </React.Fragment>
                 )}
                 {tracker.lastUpdated && <span style={styles.info}> | Updated: {formatTime(tracker.lastUpdated)}</span>}
                 {tracker.warning && <span style={styles.warning}> | Warning: {tracker.warning}</span>}
@@ -173,7 +169,7 @@ function PeerList({ peers }) {
                <div style={styles.details}>
                  Type: {peerInfo.type || 'N/A'} |
                  Addr: {peerInfo.address || 'N/A'} |
-                 Status: <span className={peerInfo.status}>{peerInfo.status}</span>
+                 Status: <span className={peerInfo.status || 'unknown'}>{peerInfo.status || 'unknown'}</span>
                  {peerInfo.error && peerInfo.status === 'destroyed' && <span style={styles.error}> | {peerInfo.error}</span>}
                </div>
             </li>
@@ -188,21 +184,46 @@ function PeerList({ peers }) {
 
 
 // ========================================================================
-// Main Application Component (Equivalent to Vue App/Store Logic)
+// Main Application Component
 // ========================================================================
 
 function App() {
-  const [monitoringStatus, setMonitoringStatus] = useState('idle'); // idle, connecting, monitoring, stopping, error
+  const [monitoringStatus, setMonitoringStatus] = useState('idle');
   const [torrentInstance, setTorrentInstance] = useState(null);
   const [infoHash, setInfoHash] = useState(null);
   const [error, setError] = useState(null);
   const [trackerMap, setTrackerMap] = useState({});
   const [peerMap, setPeerMap] = useState({});
-
-  // Ref to store listener cleanup functions, similar to Vuex state management
   const listenerCleanupRef = useRef({ torrent: [], discovery: [], trackers: [] });
+  const isMountedRef = useRef(true); // Track component mount status
 
-  // Helper to add listener and store cleanup
+  // Track status without causing re-renders from cleanup/async handlers
+  const monitoringStatusRef = useRef(monitoringStatus);
+  useEffect(() => {
+      monitoringStatusRef.current = monitoringStatus;
+  }, [monitoringStatus]);
+
+  // Cleanup listeners on unmount
+  useEffect(() => {
+      isMountedRef.current = true;
+      return () => {
+          console.log("App unmounting - running final cleanup");
+          isMountedRef.current = false;
+          removeAllListeners();
+          // If a torrent is active, try to remove it cleanly
+          if (torrentInstance) {
+              try {
+                  WebtorrentClient.remove(torrentInstance.infoHash, () => {
+                     console.log(`Torrent ${torrentInstance.infoHash} removed on unmount.`);
+                  });
+              } catch (e) {
+                  console.error("Error removing torrent on unmount:", e);
+              }
+          }
+      };
+  }, [torrentInstance]); // Rerun cleanup setup if torrentInstance changes (shouldn't happen here)
+
+
   const addListener = useCallback((target, event, handler, type = 'torrent') => {
     if (!target || typeof target.addListener !== 'function' || typeof target.removeListener !== 'function') {
         console.warn(`Target for event "${event}" does not have listener methods.`);
@@ -211,9 +232,8 @@ function App() {
     console.log(`Attaching listener: ${type} - ${event}`);
     target.addListener(event, handler);
     listenerCleanupRef.current[type].push({ target, event, handler });
-  }, []); // No dependencies needed for the helper itself
+  }, []);
 
-  // Cleanup function
   const removeAllListeners = useCallback(() => {
     console.log('Cleaning up listeners...');
     Object.values(listenerCleanupRef.current).flat().forEach(({ target, event, handler }) => {
@@ -223,99 +243,142 @@ function App() {
       }
     });
     listenerCleanupRef.current = { torrent: [], discovery: [], trackers: [] };
-  }, []); // No dependencies needed for the cleanup function itself
+  }, []);
 
-  // --- State Update Callbacks (Equivalent to Vuex Mutations) ---
-   const updateTrackerStatus = useCallback(({ url, status, data = {} }) => {
+  const updateTrackerStatus = useCallback(({ url, status, data = {} }) => {
+        if (!isMountedRef.current) return; // Prevent state updates on unmounted component
         setTrackerMap(prevMap => ({
             ...prevMap,
             [url]: {
                 ...(prevMap[url] || {}),
                 status: status,
                 lastUpdated: Date.now(),
-                ...data,
-                warning: data.warning || (status === 'error' ? (data.error?.message || 'Unknown Error') : (prevMap[url]?.warning || null)), // Keep warning unless overridden or status changes from error
-                error: data.error ? (data.error.message || String(data.error)) : (status !== 'error' ? null : (prevMap[url]?.error || null)) // Set error or clear if status not error
+                peers: data.peers !== undefined ? data.peers : (prevMap[url]?.peers),
+                seeders: data.seeders !== undefined ? data.seeders : (prevMap[url]?.seeders),
+                leechers: data.leechers !== undefined ? data.leechers : (prevMap[url]?.leechers),
+                warning: data.warning || (status !== 'error' && status !== 'warning' ? null : (prevMap[url]?.warning)), // Clear old warning if status ok
+                error: data.error ? (data.error.message || String(data.error)) : (status !== 'error' ? null : (prevMap[url]?.error)) // Clear old error if status ok
             }
         }));
     }, []);
 
    const updatePeerStatus = useCallback(({ peerId, status, type, address, error }) => {
-      setPeerMap(prevMap => {
-          // Prevent overwriting 'destroyed' unless the new status is 'destroyed'
-          if (prevMap[peerId]?.status === 'destroyed' && status !== 'destroyed') {
-              return prevMap;
-          }
-          return {
-            ...prevMap,
-            [peerId]: {
-              ...(prevMap[peerId] || {}),
-              status: status,
-              type: type ?? prevMap[peerId]?.type,
-              address: address ?? prevMap[peerId]?.address,
-              error: error || null,
-              lastUpdated: Date.now()
+        if (!isMountedRef.current) return;
+        setPeerMap(prevMap => {
+            if (prevMap[peerId]?.status === 'destroyed' && status !== 'destroyed') {
+                return prevMap;
             }
-          };
-      });
+            return {
+                ...prevMap,
+                [peerId]: {
+                    ...(prevMap[peerId] || {}),
+                    status: status,
+                    type: type !== undefined ? type : prevMap[peerId]?.type, // Use ?? after babel fix
+                    address: address !== undefined ? address : prevMap[peerId]?.address,
+                    error: error || null,
+                    lastUpdated: Date.now()
+                }
+            };
+        });
    }, []);
 
-   // --- Monitoring Logic Effect ---
+    const stopMonitoringInternal = useCallback(() => {
+        const currentInstance = torrentInstanceRef.current; // Use ref for closure
+        const currentStatus = monitoringStatusRef.current;
+
+        if (!currentInstance || currentStatus === 'stopping' || currentStatus === 'idle') {
+            return;
+        }
+        console.log(`stopMonitoringInternal called for ${currentInstance?.infoHash}`);
+        setMonitoringStatus('stopping'); // Update state immediately
+
+        // 1. Remove listeners
+        removeAllListeners();
+
+        // 2. Remove torrent from client (async)
+        setTimeout(() => {
+             try {
+                 console.log(`Attempting WebtorrentClient.remove for ${currentInstance.infoHash}`);
+                 WebtorrentClient.remove(currentInstance.infoHash, (removeErr) => {
+                     if (!isMountedRef.current && !removeErr) { // Check if unmounted during the async remove
+                         console.log(`Component unmounted before remove callback for ${currentInstance.infoHash}.`);
+                         return; // Don't update state if unmounted
+                     }
+                     if (removeErr) {
+                         console.error(`Error removing torrent ${currentInstance.infoHash}:`, removeErr);
+                         if (isMountedRef.current) setError(removeErr.message || String(removeErr));
+                     } else {
+                         console.log(`Torrent ${currentInstance.infoHash} removed successfully.`);
+                     }
+                     // Reset state only after removal attempt, and only if still mounted
+                     if (isMountedRef.current) {
+                         setTorrentInstance(null);
+                         setInfoHash(null);
+                         setTrackerMap({});
+                         setPeerMap({});
+                         // Don't reset error if removal failed
+                         setMonitoringStatus('idle');
+                     }
+                 });
+             } catch (error) {
+                 console.error(`Error initiating removal for torrent ${currentInstance?.infoHash}:`, error);
+                 if (isMountedRef.current) {
+                     setError(error.message || String(error));
+                     setTorrentInstance(null); // Still attempt to clear state
+                     setInfoHash(null);
+                     setTrackerMap({});
+                     setPeerMap({});
+                     setMonitoringStatus('error'); // End in error state
+                 }
+             }
+        }, 50); // Small delay
+
+    }, [removeAllListeners]); // torrentInstanceRef used internally
+
+
+   // Effect for managing the torrent lifecycle and listeners
+   const torrentInstanceRef = useRef(torrentInstance); // Ref to access current torrent in cleanup
    useEffect(() => {
-       let currentTorrent = torrentInstance; // Capture instance for cleanup closure
+       torrentInstanceRef.current = torrentInstance;
+       let currentTorrent = torrentInstance;
        if (!currentTorrent) {
-           return; // Not monitoring anything
+           // If torrentInstance becomes null (e.g., after stop), ensure listeners are cleaned.
+           // This might be redundant if stopMonitoringInternal is robust, but acts as a safeguard.
+           removeAllListeners();
+           return;
        }
 
-       // --- Attach Listeners using the helper ---
-       const handleReady = () => {
-           console.log(`Torrent ready: ${currentTorrent?.infoHash}`);
-           setMonitoringStatus('monitoring');
-       };
+       console.log(`Effect running for torrent: ${currentTorrent?.infoHash}`);
+
+       // --- Attach Listeners ---
+       const handleReady = () => { if (isMountedRef.current) setMonitoringStatus('monitoring'); };
        const handleMetadata = () => {
-           console.log(`Metadata received: ${currentTorrent?.infoHash}`);
-           setInfoHash(currentTorrent?.infoHash); // Update infohash if received later
-            // Re-attach tracker listeners potentially
-           if (currentTorrent?.discovery?.tracker?._trackers) {
+            if (!isMountedRef.current) return;
+            console.log(`Metadata received: ${currentTorrent?.infoHash}`);
+            setInfoHash(currentTorrent?.infoHash);
+            if (currentTorrent?.discovery?.tracker?._trackers) {
                 attachTrackerListeners(currentTorrent.discovery.tracker._trackers);
-           }
-       };
-       const handlePeerConnect = (peerId, wire, remoteAddr) => {
-           console.log('Peer Connected:', peerId, wire.type, remoteAddr);
-           updatePeerStatus({ peerId, status: 'connected', type: wire.type, address: remoteAddr });
-       };
-        const handlePeerCreate = (peerId) => {
-            console.log('Peer Created:', peerId);
-            updatePeerStatus({ peerId, status: 'connecting', type: 'unknown' });
+            }
         };
-       const handlePeerDestroy = (peerId, errMessage) => {
-           console.log('Peer Destroyed:', peerId, errMessage);
-            updatePeerStatus({ peerId, status: 'destroyed', error: errMessage || 'Closed' });
+       const handlePeerConnect = (peerId, wire, remoteAddr) => { updatePeerStatus({ peerId, status: 'connected', type: wire.type, address: remoteAddr }); };
+       const handlePeerCreate = (peerId) => { updatePeerStatus({ peerId, status: 'connecting', type: 'unknown' }); };
+       const handlePeerDestroy = (peerId, errMessage) => { updatePeerStatus({ peerId, status: 'destroyed', error: errMessage || 'Closed' }); };
+       const handleTrackerAnnounce = () => { console.log('Tracker announce completed'); };
+       const handleError = (err) => { if (isMountedRef.current) setError(err.message || String(err)); };
+       const handleWarning = (warn) => { console.warn('Torrent Warning:', warn); };
+       const handleClose = () => {
+           console.log('Torrent instance closed event received');
+            // Check status ref before resetting
+            if (monitoringStatusRef.current !== 'stopping' && monitoringStatusRef.current !== 'idle' && isMountedRef.current) {
+                stopMonitoringInternal();
+            }
        };
-       const handleTrackerAnnounce = () => {
-           console.log('Tracker announce completed (some tracker)');
-       };
-       const handleError = (err) => {
-           console.error('Torrent Error:', err);
-           setError(err.message || String(err));
-           // Optionally setMonitoringStatus('error'); depending on severity
-       };
-       const handleWarning = (warn) => {
-           console.warn('Torrent Warning:', warn);
-           // Potentially display warnings
-       };
-        const handleClose = () => {
-            console.log('Torrent instance closed');
-            // Check status before resetting to avoid race conditions if stopped manually
-             if (monitoringStatusRef.current !== 'stopping' && monitoringStatusRef.current !== 'idle') {
-                 stopMonitoringInternal(); // Trigger cleanup
-             }
-        };
 
-        const attachTrackerListeners = (trackerClients) => {
-            if (!Array.isArray(trackerClients)) return;
+       const attachTrackerListeners = (trackerClients) => {
+           // Safety check for older JS (Array.isArray might be needed if supporting very old env)
+            if (!trackerClients || typeof trackerClients.forEach !== 'function') return;
 
-            trackerClients.forEach(trackerClient => {
+           trackerClients.forEach(trackerClient => {
                 if (!trackerClient || typeof trackerClient.addListener !== 'function') {
                      console.warn("Invalid tracker client found in discovery:", trackerClient);
                      return;
@@ -326,15 +389,16 @@ function App() {
                     return;
                 }
 
-                // Initial status if not already set
-                 setTrackerMap(prev => prev[url] ? prev : {...prev, [url]: { status: 'connecting'}});
+                // Use functional update for initial status setting to avoid stale state issues
+                setTrackerMap(prev => prev[url] ? prev : {...prev, [url]: { status: 'connecting'}});
 
                  const onConnect = () => { updateTrackerStatus({ url, status: 'connected' }); };
                  const onClose = () => { updateTrackerStatus({ url, status: 'closed' }); };
                  const onError = (err) => { updateTrackerStatus({ url, status: 'error', data: { error: err } }); };
-                 const onUpdate = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data?.complete ?? 0) + (data?.incomplete ?? 0), seeders: data?.complete, leechers: data?.incomplete } }); };
-                 const onScrape = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data?.complete ?? 0) + (data?.incomplete ?? 0), seeders: data?.complete, leechers: data?.incomplete } }); };
-                 const onWarning = (warn) => { updateTrackerStatus({ url, data: { warning: warn?.message || String(warn) } }); };
+                 // Extract data safely, provide defaults if properties missing
+                 const onUpdate = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data?.complete, leechers: data?.incomplete } }); };
+                 const onScrape = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data?.complete, leechers: data?.incomplete } }); };
+                 const onWarning = (warn) => { updateTrackerStatus({ url, data: { warning: (warn && warn.message) || String(warn) } }); }; // Safer warning access
 
                  addListener(trackerClient, 'socketConnect', onConnect, 'trackers');
                  addListener(trackerClient, 'socketClose', onClose, 'trackers');
@@ -342,132 +406,96 @@ function App() {
                  addListener(trackerClient, 'update', onUpdate, 'trackers');
                  addListener(trackerClient, 'scrape', onScrape, 'trackers');
                  addListener(trackerClient, 'warning', onWarning, 'trackers');
-            });
-        };
+           });
+       };
 
        const handleDiscoveryStarted = () => {
             console.log('Discovery Started - Attaching Tracker Listeners');
-             if (!currentTorrent?.discovery?.tracker?._trackers) {
+            const trackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
+            if (!trackers) {
                  console.warn('Cannot access internal trackers for detailed monitoring.');
                  return;
              }
-            attachTrackerListeners(currentTorrent.discovery.tracker._trackers);
+            attachTrackerListeners(trackers);
        };
 
-       // Add Torrent Listeners
+       // Add Listeners using helper
        addListener(currentTorrent, 'ready', handleReady);
        addListener(currentTorrent, 'metadata', handleMetadata);
        addListener(currentTorrent, 'peerConnect', handlePeerConnect);
-        addListener(currentTorrent, 'peerCreate', handlePeerCreate);
+       addListener(currentTorrent, 'peerCreate', handlePeerCreate);
        addListener(currentTorrent, 'peerDestroy', handlePeerDestroy);
        addListener(currentTorrent, 'trackerAnnounce', handleTrackerAnnounce);
        addListener(currentTorrent, 'error', handleError);
        addListener(currentTorrent, 'warning', handleWarning);
-        addListener(currentTorrent, 'close', handleClose);
-
-       // Add Discovery Listener (which attaches tracker listeners)
+       addListener(currentTorrent, 'close', handleClose);
        addListener(currentTorrent, 'discoveryStarted', handleDiscoveryStarted, 'discovery');
 
-       // Initial check in case discovery already started before listener attached
-       if (currentTorrent?.discovery?.tracker?._trackers) {
-           attachTrackerListeners(currentTorrent.discovery.tracker._trackers);
+       // Initial check in case discovery already started
+        const initialTrackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
+       if (initialTrackers) {
+           attachTrackerListeners(initialTrackers);
        }
 
-       // --- Cleanup Function ---
+       // --- Effect Cleanup Function ---
+       // This function runs when torrentInstance changes (becomes null) or when the component unmounts.
        return () => {
-           console.log(`Running cleanup for ${currentTorrent?.infoHash}`);
-           removeAllListeners(); // Remove listeners added by addListener helper
-
-           if (currentTorrent) {
-               try {
-                   // Use a timeout to decouple removal from potential state updates during cleanup
-                   setTimeout(() => {
-                       console.log(`Attempting WebtorrentClient.remove for ${currentTorrent.infoHash}`);
-                       WebtorrentClient.remove(currentTorrent.infoHash, (removeErr) => {
-                           if (removeErr) {
-                               console.error(`Error removing torrent ${currentTorrent.infoHash} during cleanup:`, removeErr);
-                           } else {
-                               console.log(`Torrent ${currentTorrent.infoHash} removed by cleanup.`);
-                           }
-                       });
-                   }, 50); // Short delay
-               } catch (cleanupError) {
-                   console.error(`Error initiating torrent removal during cleanup for ${currentTorrent?.infoHash}:`, cleanupError);
-               }
-           }
-           // Reset state AFTER initiating removal/cleanup
-           setTorrentInstance(null);
-           setInfoHash(null);
-           setTrackerMap({});
-           setPeerMap({});
-           setError(null);
-            // Avoid setting status back to 'idle' immediately if an error caused the stop
-            if (monitoringStatusRef.current !== 'error') {
-                 setMonitoringStatus('idle');
-            }
+           console.log(`Running EFFECT cleanup for ${currentTorrent?.infoHash}`);
+           // Remove listeners added within THIS effect execution
+           removeAllListeners();
+           // Note: We don't call WebtorrentClient.remove here directly anymore.
+           // stopMonitoringInternal handles triggering the removal when the instance is set to null.
        };
-   }, [torrentInstance, addListener, removeAllListeners, updatePeerStatus, updateTrackerStatus]); // Effect dependencies
+   }, [torrentInstance, addListener, removeAllListeners, updatePeerStatus, updateTrackerStatus, stopMonitoringInternal]);
 
-    // --- Actions ---
+
     const handleStartMonitoring = useCallback(async (torrentId) => {
-        if (monitoringStatus !== 'idle' && monitoringStatus !== 'error') {
+        if (monitoringStatusRef.current !== 'idle' && monitoringStatusRef.current !== 'error') {
             console.warn('Monitoring already active or stopping.');
             return;
         }
         console.log("Attempting to start monitoring:", torrentId);
         setMonitoringStatus('connecting');
         setError(null);
-        setInfoHash(null); // Clear old hash
+        setInfoHash(null);
         setTrackerMap({});
         setPeerMap({});
-        removeAllListeners(); // Clean previous listeners just in case
+        removeAllListeners(); // Clean previous just in case
 
         try {
-            // This relies on the placeholder/mock or a REAL bundled WebtorrentClient
-            const torrent = await WebtorrentClient.add(torrentId, { path: false }); // path: false might prevent storage use
+            // ** THIS IS THE CORE ** relies on bundled/polyfilled client
+            const torrent = await WebtorrentClient.add(torrentId, { path: false });
 
              if (!torrent || typeof torrent.addListener !== 'function') {
                  throw new Error("Failed to get a valid torrent instance from client.");
              }
 
             console.log("Torrent added/retrieved:", torrent.infoHash || 'N/A');
-            setInfoHash(torrent.infoHash);
-            setTorrentInstance(torrent); // This will trigger the useEffect
-            // Status set to 'monitoring' inside useEffect's 'ready' handler
+             if (isMountedRef.current) { // Check mount status before setting state
+                 setInfoHash(torrent.infoHash);
+                 setTorrentInstance(torrent); // Triggers the useEffect
+             } else {
+                 console.warn("Component unmounted before torrent instance could be set.");
+                 // Attempt cleanup if unmounted before ready
+                  try { WebtorrentClient.remove(torrent.infoHash); } catch(e){}
+             }
 
         } catch (err) {
             console.error('Failed to start monitoring:', err);
-            setError(err.message || String(err));
-            setMonitoringStatus('error');
-            setTorrentInstance(null); // Ensure no stale instance
-            removeAllListeners(); // Cleanup failed attempt
+             if (isMountedRef.current) {
+                 setError(err.message || String(err));
+                 setMonitoringStatus('error');
+                 setTorrentInstance(null);
+                 removeAllListeners();
+             }
         }
-    }, [monitoringStatus, removeAllListeners]); // Include monitoringStatus to prevent starting while stopping etc.
-
-     // Ref to keep track of status inside cleanup without adding status to useEffect deps
-     const monitoringStatusRef = useRef(monitoringStatus);
-     useEffect(() => {
-         monitoringStatusRef.current = monitoringStatus;
-     }, [monitoringStatus]);
-
-     const stopMonitoringInternal = useCallback(() => {
-          if (!torrentInstance || monitoringStatus === 'stopping' || monitoringStatus === 'idle') {
-            return;
-          }
-          console.log(`stopMonitoringInternal called for ${torrentInstance?.infoHash}`);
-          setMonitoringStatus('stopping');
-          // The actual cleanup (listener removal, client.remove) happens
-          // in the useEffect's *return* function when torrentInstance becomes null.
-          setTorrentInstance(null); // Trigger the useEffect cleanup
-         // Reset status to idle is now handled within the cleanup effect return function
-     }, [torrentInstance, monitoringStatus]);
+    }, [removeAllListeners]); // No need for monitoringStatus here if using ref inside
 
     const handleStopMonitoring = () => {
         stopMonitoringInternal();
     };
 
 
-  // --- Render ---
   return (
     <div style={styles.appContainer}>
       <h1>WebTorrent Connection Monitor</h1>
@@ -487,10 +515,11 @@ function App() {
       <div style={styles.statusDisplay} className="info">
         <p><strong>Overall Status:</strong> <span className={monitoringStatus}>{monitoringStatus}</span></p>
         {infoHash && <p><strong>Monitoring Info Hash:</strong> {infoHash}</p>}
-        {monitoringStatus === 'connecting' && <p>Connecting / Fetching Metadata...</p>}
+        {monitoringStatus === 'monitoring' && !infoHash && <p className="connecting">Waiting for metadata...</p>}
+        {monitoringStatus === 'connecting' && <p className="connecting">Connecting / Fetching Metadata...</p>}
       </div>
 
-      {monitoringStatus !== 'idle' && monitoringStatus !== 'error' && (
+      {(monitoringStatus === 'monitoring' || monitoringStatus === 'connecting' || monitoringStatus === 'stopping') && (
         <div style={styles.monitorSection}>
           <TrackerList trackers={trackerMap} />
           <PeerList peers={peerMap} />
@@ -510,196 +539,82 @@ function App() {
             <p>Enter a magnet link or info hash above to begin monitoring.</p>
          </div>
       )}
-
-      {/* Debugging Output - Optional */}
-      {/* <details>
-          <summary>Debug State</summary>
-          <pre style={{fontSize: '10px'}}>
-              Status: {monitoringStatus}{'\n'}
-              InfoHash: {infoHash}{'\n'}
-              Error: {error}{'\n'}
-              Trackers: {JSON.stringify(trackerMap, null, 2)}{'\n'}
-              Peers: {JSON.stringify(peerMap, null, 2)}{'\n'}
-          </pre>
-      </details> */}
-
     </div>
   );
 }
 
 
 // ========================================================================
-// Basic Inline Styles (Move to CSS file/modules in real app)
+// Basic Inline Styles
 // ========================================================================
 const styles = {
-  // Colors (based on public/index.html)
-  bgDark: '#2c3e50',
-  bgMedium: '#34495e',
-  bgLight: '#3b556f',
-  textLight: '#ecf0f1',
-  textMedium: '#bdc3c7',
-  textDark: '#95a5a6',
-  accentBlue: '#3498db',
-  accentGreen: '#2ecc71',
-  accentOrange: '#f39c12',
-  accentRed: '#e74c3c',
-  borderColor: '#7f8c8d',
+  bgDark: '#2c3e50', bgMedium: '#34495e', bgLight: '#3b556f',
+  textLight: '#ecf0f1', textMedium: '#bdc3c7', textDark: '#95a5a6',
+  accentBlue: '#3498db', accentGreen: '#2ecc71', accentOrange: '#f39c12',
+  accentRed: '#e74c3c', borderColor: '#7f8c8d',
 
-  // Element Styles
-  appContainer: {
-    maxWidth: '95%',
-    minWidth: '320px',
-    margin: '20px auto',
-    padding: '20px',
-    backgroundColor: '#34495e', // bgMedium
-    borderRadius: '8px',
-    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-  },
-  inputContainer: {
-    display: 'flex',
-    gap: '10px',
-    marginBottom: '20px',
-    flexWrap: 'wrap',
-  },
-  input: {
-    minWidth: '250px',
-    padding: '10px',
-    border: '1px solid #7f8c8d', // borderColor
-    borderRadius: '4px',
-    backgroundColor: '#ecf0f1', // textLight
-    color: '#2c3e50', // bgDark
-    fontSize: '1em',
-    flexGrow: 1,
-  },
-  button: {
-    padding: '10px 15px',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '1em',
-    transition: 'background-color 0.2s, opacity 0.2s',
-    color: 'white',
-  },
-  buttonGreen: {
-     backgroundColor: '#2ecc71', // accentGreen
-     whiteSpace: 'nowrap',
-  },
-   buttonRed: {
-     backgroundColor: '#e74c3c', // accentRed
-     marginTop: '20px',
-   },
-  errorDisplay: {
-    marginTop: '15px',
-    padding: '15px',
-    backgroundColor: 'rgba(231, 76, 60, 0.1)',
-    border: '1px solid #e74c3c', // accentRed
-    borderRadius: '4px',
-    color: '#e74c3c', // accentRed
-  },
-  statusDisplay: {
-    marginTop: '15px',
-    padding: '10px',
-    backgroundColor: '#3b556f', // bgLight
-    borderRadius: '4px',
-    color: '#bdc3c7', // textMedium
-  },
-   monitorSection: {
-      marginTop: '25px',
-      paddingTop: '15px',
-      borderTop: '1px solid #7f8c8d', // borderColor
-    },
-  listContainer: {
-    marginTop: '20px',
-  },
-  listItem: {
-    backgroundColor: '#3b556f', // bgLight
-    padding: '8px 12px',
-    borderRadius: '4px',
-    marginBottom: '8px',
-    fontSize: '0.9em',
-    wordBreak: 'break-all',
-    border: '1px solid #4a6a8a',
-     display: 'flex',
-     flexDirection: 'column',
-     gap: '5px',
-  },
-  details: {
-     fontSize: '0.9em',
-     color: '#bdc3c7', // textMedium
-     paddingLeft: '16px',
-   },
-   strong: {
-     color: '#ecf0f1', // textLight
-   },
-   url: {
-        wordBreak: 'break-all',
-        color: '#ecf0f1', // textLight
-   },
-  statusDot: {
-    display: 'inline-block',
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    marginRight: '6px',
-    verticalAlign: 'middle',
-  },
-  // Dot colors - MUST match CSS in index.html or a separate CSS file
+  appContainer: { maxWidth: '95%', minWidth: '320px', margin: '20px auto', padding: '20px', backgroundColor: '#34495e', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)' },
+  inputContainer: { display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' },
+  input: { minWidth: '250px', padding: '10px', border: '1px solid #7f8c8d', borderRadius: '4px', backgroundColor: '#ecf0f1', color: '#2c3e50', fontSize: '1em', flexGrow: 1 },
+  button: { padding: '10px 15px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1em', transition: 'background-color 0.2s, opacity 0.2s', color: 'white' },
+  buttonGreen: { backgroundColor: '#2ecc71', whiteSpace: 'nowrap' },
+  buttonRed: { backgroundColor: '#e74c3c', marginTop: '20px' },
+  errorDisplay: { marginTop: '15px', padding: '15px', backgroundColor: 'rgba(231, 76, 60, 0.1)', border: '1px solid #e74c3c', borderRadius: '4px', color: '#e74c3c' },
+  statusDisplay: { marginTop: '15px', padding: '10px', backgroundColor: '#3b556f', borderRadius: '4px', color: '#bdc3c7' },
+  monitorSection: { marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #7f8c8d' },
+  listContainer: { marginTop: '20px' },
+  listItem: { backgroundColor: '#3b556f', padding: '8px 12px', borderRadius: '4px', marginBottom: '8px', fontSize: '0.9em', wordBreak: 'break-all', border: '1px solid #4a6a8a', display: 'flex', flexDirection: 'column', gap: '5px' },
+  details: { fontSize: '0.9em', color: '#bdc3c7', paddingLeft: '16px' },
+  strong: { color: '#ecf0f1' },
+  url: { wordBreak: 'break-all', color: '#ecf0f1' },
+  statusDot: { display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', marginRight: '6px', verticalAlign: 'middle' },
   'dot-connected': { backgroundColor: '#2ecc71' },
-  'dot-connecting': { backgroundColor: '#3498db', animation: 'pulse 1.5s infinite ease-in-out' }, // requires @keyframes pulse
+  'dot-connecting': { backgroundColor: '#3498db', animation: 'pulse 1.5s infinite ease-in-out' },
   'dot-error': { backgroundColor: '#e74c3c' },
   'dot-closed': { backgroundColor: '#95a5a6' },
-  'dot-destroyed': { backgroundColor: '#95a5a6' }, // same as closed
+  'dot-destroyed': { backgroundColor: '#95a5a6' },
   'dot-unknown': { backgroundColor: '#7f8c8d' },
-
-  // Text colors - use className for these in JSX
-  info: { color: '#95a5a6' }, // textDark
-  warning: { color: '#f39c12' }, // accentOrange
-  error: { color: '#e74c3c' }, // accentRed
+  info: { color: '#95a5a6' },
+  warning: { color: '#f39c12' },
+  error: { color: '#e74c3c' },
 };
-
 
 // ========================================================================
 // Render the App
 // ========================================================================
-
 const rootElement = document.getElementById('root');
 if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
+  // Use legacy ReactDOM.render for compatibility with older React versions
+  ReactDOM.render(
     <React.StrictMode>
       <App />
-    </React.StrictMode>
+    </React.StrictMode>,
+    rootElement
   );
 } else {
   console.error('Root element #root not found in the HTML.');
 }
 
-
 // ========================================================================
-// Add Keyframes for Pulse Animation (needed for dot-connecting)
+// Inject CSS Keyframes and Class Styles
 // ========================================================================
 const styleSheet = document.createElement("style");
 styleSheet.type = "text/css";
 styleSheet.innerText = `
-  @keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.4; }
-    100% { opacity: 1; }
-  }
-
-  // Add class styles matching the 'styles' object for status text colors
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
   .connected { color: ${styles.accentGreen}; }
   .connecting { color: ${styles.accentBlue}; }
   .error { color: ${styles.accentRed}; }
   .closed, .destroyed { color: ${styles.textDark}; }
   .warning { color: ${styles.accentOrange}; }
-
-  // Fix button hover/disabled styles (inline styles don't support pseudo-classes)
+  .unknown { color: ${styles.textDark}; } /* Style for unknown status */
   button:hover:not(:disabled) { opacity: 0.8; }
   button:disabled { opacity: 0.5; cursor: not-allowed !important; }
+  /* Responsive input container */
+  @media (max-width: 500px) {
+    div[style*="inputContainer"] input { width: 100%; margin-bottom: 10px; }
+    div[style*="inputContainer"] button { width: 100%; }
+    div[style*="inputContainer"] { gap: 0; }
+  }
 `;
 document.head.appendChild(styleSheet);
-
-
-// Export the App component if this file were part of a larger module system
-// export default App; // Not needed for direct rendering in a single file context
