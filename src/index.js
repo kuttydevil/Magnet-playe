@@ -36,7 +36,6 @@ const WebtorrentClient = {
 };
 // --- END: Mock Client ---
 
-
 // ========================================================================
 // Basic Inline Styles (Defined BEFORE components use them)
 // ========================================================================
@@ -71,7 +70,6 @@ const styles = {
   warning: { color: '#f39c12' },
   error: { color: '#e74c3c' },
 };
-
 
 // ========================================================================
 // Utility Functions (Defined BEFORE components use them)
@@ -229,162 +227,109 @@ function App() {
   const [trackerMap, setTrackerMap] = useState({});
   const [peerMap, setPeerMap] = useState({});
 
-  // --- Refs (Defined before usage) ---
+  // --- Refs ---
   const listenerCleanupRef = useRef({ torrent: [], discovery: [], trackers: [] });
   const isMountedRef = useRef(true);
   const monitoringStatusRef = useRef(monitoringStatus);
-  const torrentInstanceRef = useRef(torrentInstance); // Ref to access current torrent in cleanup/callbacks
+  const torrentInstanceRef = useRef(torrentInstance);
 
-  // --- Update Refs when State changes ---
-  useEffect(() => {
-      monitoringStatusRef.current = monitoringStatus;
-  }, [monitoringStatus]);
-
-  useEffect(() => {
-      torrentInstanceRef.current = torrentInstance;
-  }, [torrentInstance]);
+  // --- Update Refs ---
+  useEffect(() => { monitoringStatusRef.current = monitoringStatus; }, [monitoringStatus]);
+  useEffect(() => { torrentInstanceRef.current = torrentInstance; }, [torrentInstance]);
 
   // --- Mount / Unmount Cleanup Effect ---
   useEffect(() => {
       isMountedRef.current = true;
-      // Store current instance in a local variable for the cleanup function's closure
-      const instanceAtUnmount = torrentInstanceRef.current;
+      const instanceAtUnmount = torrentInstanceRef.current; // Use ref value at the time of mount
       return () => {
           console.log("App unmounting - running final cleanup");
           isMountedRef.current = false;
           removeAllListeners(); // Use the hoisted function
           if (instanceAtUnmount) {
-              try {
-                  WebtorrentClient.remove(instanceAtUnmount.infoHash, () => {
-                     console.log(`Torrent ${instanceAtUnmount.infoHash} removed on unmount.`);
-                  });
-              } catch (e) {
-                  console.error("Error removing torrent on unmount:", e);
-              }
+              try { WebtorrentClient.remove(instanceAtUnmount.infoHash, () => { console.log(`Torrent ${instanceAtUnmount.infoHash} removed on unmount.`); });
+              } catch (e) { console.error("Error removing torrent on unmount:", e); }
           }
       };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once on mount/unmount
+  }, []); // Run only once
 
 
-  // --- Listener Management Functions (Defined before usage) ---
+  // --- Listener Management ---
   const removeAllListeners = useCallback(() => {
     console.log('Cleaning up listeners...');
     const allListeners = Object.values(listenerCleanupRef.current).flat();
     allListeners.forEach(({ target, event, handler }) => {
-      if (target && typeof target.removeListener === 'function') {
-        target.removeListener(event, handler);
-      }
+      if (target && typeof target.removeListener === 'function') { target.removeListener(event, handler); }
     });
     listenerCleanupRef.current = { torrent: [], discovery: [], trackers: [] };
-  }, []); // No dependencies, safe to define early
+  }, []);
 
   const addListener = useCallback((target, event, handler, type = 'torrent') => {
-    if (!target || typeof target.addListener !== 'function' || typeof target.removeListener !== 'function') {
-        console.warn(`Target for event "${event}" does not have listener methods.`);
-        return;
-    }
-    console.log(`Attaching listener: ${type} - ${event}`);
+    if (!target || typeof target.addListener !== 'function') { return; }
     target.addListener(event, handler);
     listenerCleanupRef.current[type].push({ target, event, handler });
-  }, []); // No dependencies needed
+  }, []);
 
-  // --- State Update Callbacks (Defined before usage) ---
+  // --- State Updaters ---
   const updateTrackerStatus = useCallback(({ url, status, data = {} }) => {
         if (!isMountedRef.current) return;
         setTrackerMap(prevMap => {
-            const existingTracker = prevMap[url] || {};
-            const newWarning = data.warning || (status !== 'error' && status !== 'warning' ? null : existingTracker.warning);
-            const newError = data.error ? (data.error.message || String(data.error)) : (status !== 'error' ? null : existingTracker.error);
-
-            return { ...prevMap, [url]: { ...existingTracker, status: status, lastUpdated: Date.now(), peers: data.peers !== undefined ? data.peers : existingTracker.peers, seeders: data.seeders !== undefined ? data.seeders : existingTracker.seeders, leechers: data.leechers !== undefined ? data.leechers : existingTracker.leechers, warning: newWarning, error: newError } };
+            const existing = prevMap[url] || {};
+            const newWarn = data.warning || (status !== 'error' && status !== 'warning' ? null : existing.warning);
+            const newErr = data.error ? (data.error.message || String(data.error)) : (status !== 'error' ? null : existing.error);
+            return { ...prevMap, [url]: { ...existing, status, lastUpdated: Date.now(), peers: data.peers !== undefined ? data.peers : existing.peers, seeders: data.seeders !== undefined ? data.seeders : existing.seeders, leechers: data.leechers !== undefined ? data.leechers : existing.leechers, warning: newWarn, error: newErr } };
         });
     }, []);
 
    const updatePeerStatus = useCallback(({ peerId, status, type, address, error }) => {
         if (!isMountedRef.current) return;
         setPeerMap(prevMap => {
-            const existingPeer = prevMap[peerId] || {};
-            if (existingPeer.status === 'destroyed' && status !== 'destroyed') { return prevMap; }
-            return { ...prevMap, [peerId]: { ...existingPeer, status: status, type: type !== undefined ? type : existingPeer.type, address: address !== undefined ? address : existingPeer.address, error: error || null, lastUpdated: Date.now() } };
+            const existing = prevMap[peerId] || {};
+            if (existing.status === 'destroyed' && status !== 'destroyed') { return prevMap; }
+            return { ...prevMap, [peerId]: { ...existing, status, type: type !== undefined ? type : existing.type, address: address !== undefined ? address : existing.address, error: error || null, lastUpdated: Date.now() } };
         });
    }, []);
 
-   // --- Stop Monitoring Logic (Defined before usage) ---
+   // --- Stop Logic ---
    const stopMonitoringInternal = useCallback(() => {
-        // Use refs for current values within the callback closure
         const currentInstance = torrentInstanceRef.current;
         const currentStatus = monitoringStatusRef.current;
-
-        if (!currentInstance || currentStatus === 'stopping' || currentStatus === 'idle') {
-            return;
-        }
+        if (!currentInstance || currentStatus === 'stopping' || currentStatus === 'idle') { return; }
         console.log(`stopMonitoringInternal called for ${currentInstance.infoHash}`);
-        // Update state synchronously
         setMonitoringStatus('stopping');
-        removeAllListeners(); // Clean up listeners immediately
+        removeAllListeners();
 
-        // Asynchronous removal
         setTimeout(() => {
              try {
                  console.log(`Attempting WebtorrentClient.remove for ${currentInstance.infoHash}`);
                  WebtorrentClient.remove(currentInstance.infoHash, (removeErr) => {
-                     if (!isMountedRef.current && !removeErr) {
-                         console.log(`Component unmounted before remove callback for ${currentInstance.infoHash}.`);
-                         return;
-                     }
+                     if (!isMountedRef.current && !removeErr) { return; }
                      if (isMountedRef.current) {
-                         if (removeErr) {
-                             console.error(`Error removing torrent ${currentInstance.infoHash}:`, removeErr);
-                             setError(removeErr.message || String(removeErr));
-                         } else {
-                             console.log(`Torrent ${currentInstance.infoHash} removed successfully.`);
-                             setError(null);
-                         }
-                         // Reset state fully after removal attempt
-                         setTorrentInstance(null);
-                         setInfoHash(null);
-                         setTrackerMap({});
-                         setPeerMap({});
-                         setMonitoringStatus('idle');
+                         if (removeErr) { console.error(`Error removing torrent ${currentInstance.infoHash}:`, removeErr); setError(removeErr.message || String(removeErr)); }
+                         else { console.log(`Torrent ${currentInstance.infoHash} removed successfully.`); setError(null); }
+                         setTorrentInstance(null); setInfoHash(null); setTrackerMap({}); setPeerMap({}); setMonitoringStatus('idle');
                      }
                  });
              } catch (error) {
                  console.error(`Error initiating removal for torrent ${currentInstance.infoHash}:`, error);
-                 if (isMountedRef.current) {
-                     setError(error.message || String(error));
-                     // Attempt to reset state even on failure
-                     setTorrentInstance(null);
-                     setInfoHash(null);
-                     setTrackerMap({});
-                     setPeerMap({});
-                     setMonitoringStatus('error');
-                 }
+                 if (isMountedRef.current) { setError(error.message || String(error)); setTorrentInstance(null); setInfoHash(null); setTrackerMap({}); setPeerMap({}); setMonitoringStatus('error'); }
              }
         }, 50);
+    }, [removeAllListeners]);
 
-    }, [removeAllListeners]); // Dependency on removeAllListeners
-
-   // --- Main Torrent Lifecycle Effect (Uses hoisted functions/refs) ---
+   // --- Main Torrent Lifecycle Effect ---
    useEffect(() => {
-       let currentTorrent = torrentInstance; // Local variable for effect closure
-       if (!currentTorrent) {
-           // If instance becomes null (e.g., after stop), ensure cleanup.
-           // This might be slightly redundant if stopMonitoringInternal is perfect, but safe.
-           removeAllListeners();
-           return;
-       }
-
+       let currentTorrent = torrentInstance;
+       if (!currentTorrent) { removeAllListeners(); return; }
        console.log(`Effect running for torrent: ${currentTorrent.infoHash}`);
 
        // --- Listener Handlers ---
        const handleReady = () => { if (isMountedRef.current) setMonitoringStatus('monitoring'); };
-       const handleMetadata = () => { /* ... same as before ... */
-            if (!isMountedRef.current) return;
-            console.log(`Metadata received: ${currentTorrent.infoHash}`);
-            setInfoHash(currentTorrent.infoHash);
-            const trackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
-            if (trackers) { attachTrackerListeners(trackers); }
+       const handleMetadata = () => {
+           if (!isMountedRef.current) return;
+           setInfoHash(currentTorrent.infoHash);
+           const trackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
+           if (trackers) { attachTrackerListeners(trackers); }
        };
        const handlePeerConnect = (peerId, wire, remoteAddr) => { updatePeerStatus({ peerId, status: 'connected', type: wire && wire.type, address: remoteAddr }); };
        const handlePeerCreate = (peerId) => { updatePeerStatus({ peerId, status: 'connecting', type: 'unknown' }); };
@@ -392,112 +337,59 @@ function App() {
        const handleTrackerAnnounce = () => { console.log('Tracker announce completed'); };
        const handleError = (err) => { if (isMountedRef.current) setError((err && err.message) || String(err)); };
        const handleWarning = (warn) => { console.warn('Torrent Warning:', warn); };
-       const handleClose = () => {
-           console.log('Torrent instance closed event received');
-            if (monitoringStatusRef.current !== 'stopping' && monitoringStatusRef.current !== 'idle' && isMountedRef.current) {
-                stopMonitoringInternal(); // Use the hoisted function
-            }
-       };
+       const handleClose = () => { if (monitoringStatusRef.current !== 'stopping' && monitoringStatusRef.current !== 'idle' && isMountedRef.current) { stopMonitoringInternal(); } };
 
-       // Define attachTrackerListeners *inside* useEffect or hoist it if it doesn't depend on effect-scoped variables other than addListener/updateTrackerStatus
        const attachTrackerListeners = (trackerClients) => {
-            if (!trackerClients || typeof trackerClients.forEach !== 'function') return;
-            trackerClients.forEach(trackerClient => {
-                 /* ... listener attachment logic using addListener ... */
-                  if (!trackerClient || typeof trackerClient.addListener !== 'function') return;
-                  const url = trackerClient.announceUrl;
-                  if (!url) return;
-
-                  setTrackerMap(prev => prev[url] ? prev : {...prev, [url]: { status: 'connecting'}});
-
-                   const onConnect = () => { updateTrackerStatus({ url, status: 'connected' }); };
-                   const onClose = () => { updateTrackerStatus({ url, status: 'closed' }); };
-                   const onError = (err) => { updateTrackerStatus({ url, status: 'error', data: { error: err } }); };
-                   const onUpdate = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
-                   const onScrape = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
-                   const onWarning = (warn) => { updateTrackerStatus({ url, data: { warning: (warn && warn.message) || String(warn) } }); };
-
-                   addListener(trackerClient, 'socketConnect', onConnect, 'trackers');
-                   addListener(trackerClient, 'socketClose', onClose, 'trackers');
-                   addListener(trackerClient, 'socketError', onError, 'trackers');
-                   addListener(trackerClient, 'update', onUpdate, 'trackers');
-                   addListener(trackerClient, 'scrape', onScrape, 'trackers');
-                   addListener(trackerClient, 'warning', onWarning, 'trackers');
-            });
+           if (!trackerClients || typeof trackerClients.forEach !== 'function') return;
+           trackerClients.forEach(trackerClient => {
+                 if (!trackerClient || typeof trackerClient.addListener !== 'function') return;
+                 const url = trackerClient.announceUrl;
+                 if (!url) return;
+                 setTrackerMap(prev => prev[url] ? prev : {...prev, [url]: { status: 'connecting'}});
+                 const onConnect = () => { updateTrackerStatus({ url, status: 'connected' }); };
+                 const onClose = () => { updateTrackerStatus({ url, status: 'closed' }); };
+                 const onError = (err) => { updateTrackerStatus({ url, status: 'error', data: { error: err } }); };
+                 const onUpdate = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
+                 const onScrape = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
+                 const onWarning = (warn) => { updateTrackerStatus({ url, data: { warning: (warn && warn.message) || String(warn) } }); };
+                 addListener(trackerClient, 'socketConnect', onConnect, 'trackers'); addListener(trackerClient, 'socketClose', onClose, 'trackers'); addListener(trackerClient, 'socketError', onError, 'trackers'); addListener(trackerClient, 'update', onUpdate, 'trackers'); addListener(trackerClient, 'scrape', onScrape, 'trackers'); addListener(trackerClient, 'warning', onWarning, 'trackers');
+           });
        };
 
        const handleDiscoveryStarted = () => {
-           console.log('Discovery Started - Attaching Tracker Listeners');
            const trackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
            if (!trackers) { console.warn('Cannot access internal trackers.'); return; }
            attachTrackerListeners(trackers);
        };
 
        // --- Attach All Listeners ---
-       addListener(currentTorrent, 'ready', handleReady);
-       addListener(currentTorrent, 'metadata', handleMetadata);
-       addListener(currentTorrent, 'peerConnect', handlePeerConnect);
-       addListener(currentTorrent, 'peerCreate', handlePeerCreate);
-       addListener(currentTorrent, 'peerDestroy', handlePeerDestroy);
-       addListener(currentTorrent, 'trackerAnnounce', handleTrackerAnnounce);
-       addListener(currentTorrent, 'error', handleError);
-       addListener(currentTorrent, 'warning', handleWarning);
-       addListener(currentTorrent, 'close', handleClose);
-       addListener(currentTorrent, 'discoveryStarted', handleDiscoveryStarted, 'discovery');
+       addListener(currentTorrent, 'ready', handleReady); addListener(currentTorrent, 'metadata', handleMetadata); addListener(currentTorrent, 'peerConnect', handlePeerConnect); addListener(currentTorrent, 'peerCreate', handlePeerCreate); addListener(currentTorrent, 'peerDestroy', handlePeerDestroy); addListener(currentTorrent, 'trackerAnnounce', handleTrackerAnnounce); addListener(currentTorrent, 'error', handleError); addListener(currentTorrent, 'warning', handleWarning); addListener(currentTorrent, 'close', handleClose); addListener(currentTorrent, 'discoveryStarted', handleDiscoveryStarted, 'discovery');
 
        // --- Initial Check for Trackers ---
        const initialTrackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
        if (initialTrackers) { attachTrackerListeners(initialTrackers); }
 
        // --- Effect Cleanup ---
-       return () => {
-           console.log(`Running EFFECT cleanup for ${currentTorrent.infoHash}`);
-           removeAllListeners(); // Use the hoisted function
-       };
-   // Make dependencies exhaustive
+       return () => { console.log(`Running EFFECT cleanup for ${currentTorrent.infoHash}`); removeAllListeners(); };
    }, [torrentInstance, addListener, removeAllListeners, updatePeerStatus, updateTrackerStatus, stopMonitoringInternal]);
 
 
-    // --- Action Handlers (Defined before usage in JSX) ---
+    // --- Action Handlers ---
     const handleStartMonitoring = useCallback(async (torrentId) => {
-        if (monitoringStatusRef.current !== 'idle' && monitoringStatusRef.current !== 'error') {
-            console.warn('Monitoring already active or stopping.');
-            return;
-        }
-        console.log("Attempting to start monitoring:", torrentId);
-        setMonitoringStatus('connecting');
-        setError(null);
-        setInfoHash(null);
-        setTrackerMap({});
-        setPeerMap({});
-        removeAllListeners(); // Clean previous
-
+        if (monitoringStatusRef.current !== 'idle' && monitoringStatusRef.current !== 'error') { return; }
+        setMonitoringStatus('connecting'); setError(null); setInfoHash(null); setTrackerMap({}); setPeerMap({}); removeAllListeners();
         try {
             const torrent = await WebtorrentClient.add(torrentId, { path: false });
              if (!torrent || typeof torrent.addListener !== 'function') { throw new Error("Invalid torrent instance."); }
-
-            console.log("Torrent added:", torrent.infoHash || 'N/A');
-             if (isMountedRef.current) {
-                 setInfoHash(torrent.infoHash);
-                 setTorrentInstance(torrent); // Triggers effect
-             } else {
-                 console.warn("Component unmounted before instance set.");
-                  try { WebtorrentClient.remove(torrent.infoHash); } catch(e){}
-             }
+             if (isMountedRef.current) { setInfoHash(torrent.infoHash); setTorrentInstance(torrent); }
+             else { console.warn("Unmounted before instance set."); try { WebtorrentClient.remove(torrent.infoHash); } catch(e){} }
         } catch (err) {
             console.error('Failed to start monitoring:', err);
-             if (isMountedRef.current) {
-                 setError(err.message || String(err));
-                 setMonitoringStatus('error');
-                 setTorrentInstance(null); // Ensure no stale instance
-                 removeAllListeners(); // Clean failed attempt
-             }
+             if (isMountedRef.current) { setError(err.message || String(err)); setMonitoringStatus('error'); setTorrentInstance(null); removeAllListeners(); }
         }
-    }, [removeAllListeners]); // Depends on removeAllListeners
+    }, [removeAllListeners]);
 
-    const handleStopMonitoring = () => {
-        stopMonitoringInternal(); // Use the hoisted function
-    };
+    const handleStopMonitoring = () => { stopMonitoringInternal(); };
 
 
   // --- Render ---
@@ -510,20 +402,7 @@ function App() {
         disabled={monitoringStatus === 'connecting' || monitoringStatus === 'stopping'}
       />
 
-      {error && ( /* Error Display */ )}
-      <div style={styles.statusDisplay} className="info">{ /* Status Display */ }</div>
-
-      {(monitoringStatus === 'monitoring' || monitoringStatus === 'connecting' || monitoringStatus === 'stopping') && (
-        <div style={styles.monitorSection}>
-          <TrackerList trackers={trackerMap} />
-          <PeerList peers={peerMap} />
-          <button onClick={handleStopMonitoring} /* Stop Button */ >Stop Monitoring</button>
-        </div>
-      )}
-
-      {monitoringStatus === 'idle' && ( /* Idle Message */ )}
-
-       {/* Render Error Display */}
+       {/* *** MODIFIED: Moved rendering logic down here, removed comments *** */}
        {error && (
            <div style={styles.errorDisplay}>
              <h2>Error</h2>
@@ -531,7 +410,6 @@ function App() {
            </div>
        )}
 
-        {/* Render Status Display */}
         <div style={styles.statusDisplay} className="info">
             <p><strong>Overall Status:</strong> <span className={monitoringStatus}>{monitoringStatus}</span></p>
             {infoHash && <p><strong>Monitoring Info Hash:</strong> {infoHash}</p>}
@@ -539,7 +417,6 @@ function App() {
             {monitoringStatus === 'connecting' && <p className="connecting">Connecting / Fetching Metadata...</p>}
         </div>
 
-         {/* Render Monitor Section or Idle Message */}
          {(monitoringStatus === 'monitoring' || monitoringStatus === 'connecting' || monitoringStatus === 'stopping') ? (
            <div style={styles.monitorSection}>
              <TrackerList trackers={trackerMap} />
@@ -556,7 +433,7 @@ function App() {
            <div style={{...styles.info, marginTop: '30px', textAlign: 'center', fontSize: '1.1em' }}>
              <p>Enter a magnet link or info hash above to begin monitoring.</p>
            </div>
-         ) : null /* Render nothing extra if error status */ }
+         ) : null}
     </div>
   );
 }
@@ -582,7 +459,6 @@ if (rootElement) {
 // ========================================================================
 const styleSheet = document.createElement("style");
 styleSheet.type = "text/css";
-// Added styles for h2 margin/padding/border consistent with inline styles
 styleSheet.innerText = `
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
   h2 { color: ${styles.textLight}; border-bottom: 1px solid ${styles.borderColor}; padding-bottom: 0.3em; margin-bottom: 0.7em; font-size: 1.2em; }
