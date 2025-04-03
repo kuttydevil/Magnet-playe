@@ -71,146 +71,41 @@ const styles = {
   error: { color: '#e74c3c' },
 };
 
+
 // ========================================================================
 // Utility Functions (Defined BEFORE components use them)
 // ========================================================================
 
-const formatTime = (timestamp) => {
+const formatTime = (timestamp) => { /* ... same as before ... */
   if (!timestamp) return 'N/A';
-  try {
-    return new Date(timestamp).toLocaleTimeString();
-  } catch (e) {
-    return 'Invalid Date';
-  }
+  try { return new Date(timestamp).toLocaleTimeString(); } catch (e) { return 'Invalid Date'; }
 };
-
-const getStatusClass = (status) => {
+const getStatusClass = (status) => { /* ... same as before ... */
   const lowerStatus = status && typeof status === 'string' ? status.toLowerCase() : '';
-  switch (lowerStatus) {
-    case 'connected': return 'dot-connected';
-    case 'connecting': return 'dot-connecting';
-    case 'error': return 'dot-error';
-    case 'closed':
-    case 'destroyed':
-      return 'dot-closed';
-    default: return 'dot-unknown';
-  }
+  switch (lowerStatus) { case 'connected': return 'dot-connected'; case 'connecting': return 'dot-connecting'; case 'error': return 'dot-error'; case 'closed': case 'destroyed': return 'dot-closed'; default: return 'dot-unknown'; }
 };
-
-const formatPeerId = (id) => {
-  if (id && id.length > 12) {
-    return id.substring(0, 6) + '...' + id.substring(id.length - 6);
-  }
-  return id || 'N/A';
+const formatPeerId = (id) => { /* ... same as before ... */
+  if (id && id.length > 12) { return id.substring(0, 6) + '...' + id.substring(id.length - 6); } return id || 'N/A';
 };
 
 // ========================================================================
-// React Components
+// React Components (Defined BEFORE App component uses them)
 // ========================================================================
 
-function TorrentInput({ onStartMonitoring, disabled }) {
+function TorrentInput({ onStartMonitoring, disabled }) { /* ... same as before ... */
   const [torrentId, setTorrentId] = useState('');
   const isValidInput = torrentId.trim().length > 5;
-
-  const handleStart = () => {
-    if (isValidInput) {
-      onStartMonitoring(torrentId);
-    }
-  };
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && isValidInput) {
-        handleStart();
-    }
-  }
-
-  return (
-    <div style={styles.inputContainer}>
-      <input
-        type="text"
-        value={torrentId}
-        onChange={(e) => setTorrentId(e.target.value)}
-        placeholder="Enter magnet link or info hash"
-        onKeyUp={handleKey}
-        disabled={disabled}
-        aria-label="Torrent Identifier Input"
-        style={styles.input}
-      />
-      <button onClick={handleStart} disabled={!isValidInput || disabled} style={styles.buttonGreen}>
-        Start Monitoring
-      </button>
-    </div>
-  );
+  const handleStart = () => { if (isValidInput) { onStartMonitoring(torrentId); } };
+  const handleKey = (e) => { if (e.key === 'Enter' && isValidInput) { handleStart(); } }
+  return ( <div style={styles.inputContainer}> <input type="text" value={torrentId} onChange={(e) => setTorrentId(e.target.value)} placeholder="Enter magnet link or info hash" onKeyUp={handleKey} disabled={disabled} aria-label="Torrent Identifier Input" style={styles.input}/> <button onClick={handleStart} disabled={!isValidInput || disabled} style={styles.buttonGreen}> Start Monitoring </button> </div> );
 }
-
-function TrackerList({ trackers }) {
-  const trackerEntries = Object.entries(trackers);
-  const trackerCount = trackerEntries.length;
-
-  return (
-    <div style={styles.listContainer}>
-      <h2>Trackers ({trackerCount})</h2>
-      {trackerCount > 0 ? (
-        <ul>
-          {trackerEntries.map(([url, tracker]) => (
-            <li key={url} style={styles.listItem}>
-              <div>
-                <span style={{...styles.statusDot, ...styles[getStatusClass(tracker.status)] }}></span>
-                <strong style={styles.url}>{url}</strong>
-              </div>
-              <div style={styles.details}>
-                Status: <span className={tracker.status || 'unknown'}>{tracker.status || 'unknown'}</span>
-                {(tracker.status === 'connected' || tracker.peers !== undefined) && (
-                    <React.Fragment>
-                        {tracker.peers !== undefined && <span style={styles.info}> | Peers: {tracker.peers}</span>}
-                        {tracker.seeders !== undefined && <span style={styles.info}> | Seeds: {tracker.seeders}</span>}
-                        {tracker.leechers !== undefined && <span style={styles.info}> | Leeches: {tracker.leechers}</span>}
-                    </React.Fragment>
-                )}
-                {tracker.lastUpdated && <span style={styles.info}> | Updated: {formatTime(tracker.lastUpdated)}</span>}
-                {tracker.warning && <span style={styles.warning}> | Warning: {tracker.warning}</span>}
-                {tracker.error && tracker.status === 'error' && <span style={styles.error}> | Error: {tracker.error}</span>}
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p style={styles.info}>No trackers found or being monitored.</p>
-      )}
-    </div>
-  );
+function TrackerList({ trackers }) { /* ... same as before ... */
+  const trackerEntries = Object.entries(trackers); const trackerCount = trackerEntries.length;
+  return ( <div style={styles.listContainer}> <h2>Trackers ({trackerCount})</h2> {trackerCount > 0 ? ( <ul> {trackerEntries.map(([url, tracker]) => ( <li key={url} style={styles.listItem}> <div> <span style={{...styles.statusDot, ...styles[getStatusClass(tracker.status)] }}></span> <strong style={styles.url}>{url}</strong> </div> <div style={styles.details}> Status: <span className={tracker.status || 'unknown'}>{tracker.status || 'unknown'}</span> {(tracker.status === 'connected' || tracker.peers !== undefined) && ( <React.Fragment> {tracker.peers !== undefined && <span style={styles.info}> | Peers: {tracker.peers}</span>} {tracker.seeders !== undefined && <span style={styles.info}> | Seeds: {tracker.seeders}</span>} {tracker.leechers !== undefined && <span style={styles.info}> | Leeches: {tracker.leechers}</span>} </React.Fragment> )} {tracker.lastUpdated && <span style={styles.info}> | Updated: {formatTime(tracker.lastUpdated)}</span>} {tracker.warning && <span style={styles.warning}> | Warning: {tracker.warning}</span>} {tracker.error && tracker.status === 'error' && <span style={styles.error}> | Error: {tracker.error}</span>} </div> </li> ))} </ul> ) : ( <p style={styles.info}>No trackers found or being monitored.</p> )} </div> );
 }
-
-function PeerList({ peers }) {
-   const peerEntries = Object.entries(peers);
-   const peerCount = peerEntries.length;
-   const activePeerCount = peerEntries.filter(([, p]) => p.status === 'connected').length;
-
-  return (
-    <div style={styles.listContainer}>
-      <h2>Peers ({activePeerCount})</h2>
-      {peerCount > 0 ? (
-        <ul>
-          {peerEntries.map(([peerId, peerInfo]) => (
-            <li key={peerId} style={styles.listItem}>
-               <div>
-                 <span style={{...styles.statusDot, ...styles[getStatusClass(peerInfo.status)] }}></span>
-                 <strong style={styles.strong}>ID:</strong> {formatPeerId(peerId)}
-               </div>
-               <div style={styles.details}>
-                 Type: {peerInfo.type || 'N/A'} |
-                 Addr: {peerInfo.address || 'N/A'} |
-                 Status: <span className={peerInfo.status || 'unknown'}>{peerInfo.status || 'unknown'}</span>
-                 {peerInfo.error && peerInfo.status === 'destroyed' && <span style={styles.error}> | {peerInfo.error}</span>}
-               </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p style={styles.info}>No peers connected or attempting connection.</p>
-      )}
-    </div>
-  );
+function PeerList({ peers }) { /* ... same as before ... */
+   const peerEntries = Object.entries(peers); const peerCount = peerEntries.length; const activePeerCount = peerEntries.filter(([, p]) => p.status === 'connected').length;
+  return ( <div style={styles.listContainer}> <h2>Peers ({activePeerCount})</h2> {peerCount > 0 ? ( <ul> {peerEntries.map(([peerId, peerInfo]) => ( <li key={peerId} style={styles.listItem}> <div> <span style={{...styles.statusDot, ...styles[getStatusClass(peerInfo.status)] }}></span> <strong style={styles.strong}>ID:</strong> {formatPeerId(peerId)} </div> <div style={styles.details}> Type: {peerInfo.type || 'N/A'} | Addr: {peerInfo.address || 'N/A'} | Status: <span className={peerInfo.status || 'unknown'}>{peerInfo.status || 'unknown'}</span> {peerInfo.error && peerInfo.status === 'destroyed' && <span style={styles.error}> | {peerInfo.error}</span>} </div> </li> ))} </ul> ) : ( <p style={styles.info}>No peers connected or attempting connection.</p> )} </div> );
 }
 
 
@@ -237,40 +132,26 @@ function App() {
   useEffect(() => { monitoringStatusRef.current = monitoringStatus; }, [monitoringStatus]);
   useEffect(() => { torrentInstanceRef.current = torrentInstance; }, [torrentInstance]);
 
-  // --- Mount / Unmount Cleanup Effect ---
-  useEffect(() => {
-      isMountedRef.current = true;
-      const instanceAtUnmount = torrentInstanceRef.current; // Use ref value at the time of mount
-      return () => {
-          console.log("App unmounting - running final cleanup");
-          isMountedRef.current = false;
-          removeAllListeners(); // Use the hoisted function
-          if (instanceAtUnmount) {
-              try { WebtorrentClient.remove(instanceAtUnmount.infoHash, () => { console.log(`Torrent ${instanceAtUnmount.infoHash} removed on unmount.`); });
-              } catch (e) { console.error("Error removing torrent on unmount:", e); }
-          }
-      };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once
-
-
-  // --- Listener Management ---
+  // --- HOISTED Listener Management Functions ---
   const removeAllListeners = useCallback(() => {
-    console.log('Cleaning up listeners...');
+    // console.log('Cleaning up listeners...'); // Verbose
     const allListeners = Object.values(listenerCleanupRef.current).flat();
     allListeners.forEach(({ target, event, handler }) => {
-      if (target && typeof target.removeListener === 'function') { target.removeListener(event, handler); }
+      if (target && typeof target.removeListener === 'function') {
+        target.removeListener(event, handler);
+      }
     });
     listenerCleanupRef.current = { torrent: [], discovery: [], trackers: [] };
   }, []);
 
   const addListener = useCallback((target, event, handler, type = 'torrent') => {
     if (!target || typeof target.addListener !== 'function') { return; }
+    // console.log(`Attaching listener: ${type} - ${event}`); // Verbose
     target.addListener(event, handler);
     listenerCleanupRef.current[type].push({ target, event, handler });
   }, []);
 
-  // --- State Updaters ---
+  // --- HOISTED State Updaters ---
   const updateTrackerStatus = useCallback(({ url, status, data = {} }) => {
         if (!isMountedRef.current) return;
         setTrackerMap(prevMap => {
@@ -290,14 +171,14 @@ function App() {
         });
    }, []);
 
-   // --- Stop Logic ---
+   // --- HOISTED Stop Monitoring Logic ---
    const stopMonitoringInternal = useCallback(() => {
         const currentInstance = torrentInstanceRef.current;
         const currentStatus = monitoringStatusRef.current;
         if (!currentInstance || currentStatus === 'stopping' || currentStatus === 'idle') { return; }
         console.log(`stopMonitoringInternal called for ${currentInstance.infoHash}`);
         setMonitoringStatus('stopping');
-        removeAllListeners();
+        removeAllListeners(); // Defined above
 
         setTimeout(() => {
              try {
@@ -315,12 +196,54 @@ function App() {
                  if (isMountedRef.current) { setError(error.message || String(error)); setTorrentInstance(null); setInfoHash(null); setTrackerMap({}); setPeerMap({}); setMonitoringStatus('error'); }
              }
         }, 50);
-    }, [removeAllListeners]);
+    }, [removeAllListeners]); // Depends only on removeAllListeners
+
+  // --- HOISTED Function to Attach Tracker Listeners ---
+  // This function now needs addListener and updateTrackerStatus passed in or defined in scope
+  const attachTrackerListeners = useCallback((trackerClients) => {
+        if (!trackerClients || typeof trackerClients.forEach !== 'function') return;
+        trackerClients.forEach(trackerClient => {
+              if (!trackerClient || typeof trackerClient.addListener !== 'function') { return; }
+              const url = trackerClient.announceUrl;
+              if (!url) { return; }
+
+              setTrackerMap(prev => prev[url] ? prev : {...prev, [url]: { status: 'connecting'}});
+
+              const onConnect = () => { updateTrackerStatus({ url, status: 'connected' }); };
+              const onClose = () => { updateTrackerStatus({ url, status: 'closed' }); };
+              const onError = (err) => { updateTrackerStatus({ url, status: 'error', data: { error: err } }); };
+              const onUpdate = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
+              const onScrape = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
+              const onWarning = (warn) => { updateTrackerStatus({ url, data: { warning: (warn && warn.message) || String(warn) } }); };
+
+              addListener(trackerClient, 'socketConnect', onConnect, 'trackers');
+              addListener(trackerClient, 'socketClose', onClose, 'trackers');
+              addListener(trackerClient, 'socketError', onError, 'trackers');
+              addListener(trackerClient, 'update', onUpdate, 'trackers');
+              addListener(trackerClient, 'scrape', onScrape, 'trackers');
+              addListener(trackerClient, 'warning', onWarning, 'trackers');
+        });
+   }, [addListener, updateTrackerStatus]); // Depends on these callbacks
+
+
+   // --- Mount / Unmount Cleanup Effect ---
+   useEffect(() => {
+       isMountedRef.current = true;
+       const instanceAtUnmount = torrentInstanceRef.current;
+       return () => {
+           isMountedRef.current = false;
+           removeAllListeners(); // Use hoisted function
+           if (instanceAtUnmount) {
+               try { WebtorrentClient.remove(instanceAtUnmount.infoHash); } catch (e) { console.error("Error removing torrent on unmount:", e); }
+           }
+       };
+   }, [removeAllListeners]); // Depends only on removeAllListeners
 
    // --- Main Torrent Lifecycle Effect ---
    useEffect(() => {
        let currentTorrent = torrentInstance;
-       if (!currentTorrent) { removeAllListeners(); return; }
+       if (!currentTorrent) { return; } // Don't run if no instance
+
        console.log(`Effect running for torrent: ${currentTorrent.infoHash}`);
 
        // --- Listener Handlers ---
@@ -329,67 +252,50 @@ function App() {
            if (!isMountedRef.current) return;
            setInfoHash(currentTorrent.infoHash);
            const trackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
-           if (trackers) { attachTrackerListeners(trackers); }
+           if (trackers) { attachTrackerListeners(trackers); } // Use hoisted function
        };
        const handlePeerConnect = (peerId, wire, remoteAddr) => { updatePeerStatus({ peerId, status: 'connected', type: wire && wire.type, address: remoteAddr }); };
        const handlePeerCreate = (peerId) => { updatePeerStatus({ peerId, status: 'connecting', type: 'unknown' }); };
        const handlePeerDestroy = (peerId, errMessage) => { updatePeerStatus({ peerId, status: 'destroyed', error: errMessage || 'Closed' }); };
-       const handleTrackerAnnounce = () => { console.log('Tracker announce completed'); };
+       const handleTrackerAnnounce = () => {}; // No action needed here now
        const handleError = (err) => { if (isMountedRef.current) setError((err && err.message) || String(err)); };
        const handleWarning = (warn) => { console.warn('Torrent Warning:', warn); };
        const handleClose = () => { if (monitoringStatusRef.current !== 'stopping' && monitoringStatusRef.current !== 'idle' && isMountedRef.current) { stopMonitoringInternal(); } };
-
-       const attachTrackerListeners = (trackerClients) => {
-           if (!trackerClients || typeof trackerClients.forEach !== 'function') return;
-           trackerClients.forEach(trackerClient => {
-                 if (!trackerClient || typeof trackerClient.addListener !== 'function') return;
-                 const url = trackerClient.announceUrl;
-                 if (!url) return;
-                 setTrackerMap(prev => prev[url] ? prev : {...prev, [url]: { status: 'connecting'}});
-                 const onConnect = () => { updateTrackerStatus({ url, status: 'connected' }); };
-                 const onClose = () => { updateTrackerStatus({ url, status: 'closed' }); };
-                 const onError = (err) => { updateTrackerStatus({ url, status: 'error', data: { error: err } }); };
-                 const onUpdate = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
-                 const onScrape = (data) => { updateTrackerStatus({ url, status: 'connected', data: { peers: (data && data.complete !== undefined ? data.complete : 0) + (data && data.incomplete !== undefined ? data.incomplete : 0), seeders: data && data.complete, leechers: data && data.incomplete } }); };
-                 const onWarning = (warn) => { updateTrackerStatus({ url, data: { warning: (warn && warn.message) || String(warn) } }); };
-                 addListener(trackerClient, 'socketConnect', onConnect, 'trackers'); addListener(trackerClient, 'socketClose', onClose, 'trackers'); addListener(trackerClient, 'socketError', onError, 'trackers'); addListener(trackerClient, 'update', onUpdate, 'trackers'); addListener(trackerClient, 'scrape', onScrape, 'trackers'); addListener(trackerClient, 'warning', onWarning, 'trackers');
-           });
-       };
-
        const handleDiscoveryStarted = () => {
            const trackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
            if (!trackers) { console.warn('Cannot access internal trackers.'); return; }
-           attachTrackerListeners(trackers);
+           attachTrackerListeners(trackers); // Use hoisted function
        };
 
-       // --- Attach All Listeners ---
+       // --- Attach Listeners ---
        addListener(currentTorrent, 'ready', handleReady); addListener(currentTorrent, 'metadata', handleMetadata); addListener(currentTorrent, 'peerConnect', handlePeerConnect); addListener(currentTorrent, 'peerCreate', handlePeerCreate); addListener(currentTorrent, 'peerDestroy', handlePeerDestroy); addListener(currentTorrent, 'trackerAnnounce', handleTrackerAnnounce); addListener(currentTorrent, 'error', handleError); addListener(currentTorrent, 'warning', handleWarning); addListener(currentTorrent, 'close', handleClose); addListener(currentTorrent, 'discoveryStarted', handleDiscoveryStarted, 'discovery');
 
-       // --- Initial Check for Trackers ---
+       // --- Initial Check ---
        const initialTrackers = currentTorrent && currentTorrent.discovery && currentTorrent.discovery.tracker && currentTorrent.discovery.tracker._trackers;
-       if (initialTrackers) { attachTrackerListeners(initialTrackers); }
+       if (initialTrackers) { attachTrackerListeners(initialTrackers); } // Use hoisted function
 
        // --- Effect Cleanup ---
-       return () => { console.log(`Running EFFECT cleanup for ${currentTorrent.infoHash}`); removeAllListeners(); };
-   }, [torrentInstance, addListener, removeAllListeners, updatePeerStatus, updateTrackerStatus, stopMonitoringInternal]);
+       return () => { console.log(`Running EFFECT cleanup for ${currentTorrent.infoHash}`); removeAllListeners(); }; // Use hoisted function
+
+   }, [torrentInstance, addListener, removeAllListeners, updatePeerStatus, updateTrackerStatus, stopMonitoringInternal, attachTrackerListeners]); // Added attachTrackerListeners dependency
 
 
     // --- Action Handlers ---
     const handleStartMonitoring = useCallback(async (torrentId) => {
         if (monitoringStatusRef.current !== 'idle' && monitoringStatusRef.current !== 'error') { return; }
-        setMonitoringStatus('connecting'); setError(null); setInfoHash(null); setTrackerMap({}); setPeerMap({}); removeAllListeners();
+        setMonitoringStatus('connecting'); setError(null); setInfoHash(null); setTrackerMap({}); setPeerMap({}); removeAllListeners(); // Use hoisted function
         try {
             const torrent = await WebtorrentClient.add(torrentId, { path: false });
              if (!torrent || typeof torrent.addListener !== 'function') { throw new Error("Invalid torrent instance."); }
              if (isMountedRef.current) { setInfoHash(torrent.infoHash); setTorrentInstance(torrent); }
-             else { console.warn("Unmounted before instance set."); try { WebtorrentClient.remove(torrent.infoHash); } catch(e){} }
+             else { try { WebtorrentClient.remove(torrent.infoHash); } catch(e){} }
         } catch (err) {
             console.error('Failed to start monitoring:', err);
-             if (isMountedRef.current) { setError(err.message || String(err)); setMonitoringStatus('error'); setTorrentInstance(null); removeAllListeners(); }
+             if (isMountedRef.current) { setError(err.message || String(err)); setMonitoringStatus('error'); setTorrentInstance(null); removeAllListeners(); } // Use hoisted function
         }
-    }, [removeAllListeners]);
+    }, [removeAllListeners]); // Depends only on removeAllListeners
 
-    const handleStopMonitoring = () => { stopMonitoringInternal(); };
+    const handleStopMonitoring = () => { stopMonitoringInternal(); }; // Use hoisted function
 
 
   // --- Render ---
@@ -402,7 +308,6 @@ function App() {
         disabled={monitoringStatus === 'connecting' || monitoringStatus === 'stopping'}
       />
 
-       {/* *** MODIFIED: Moved rendering logic down here, removed comments *** */}
        {error && (
            <div style={styles.errorDisplay}>
              <h2>Error</h2>
@@ -444,15 +349,8 @@ function App() {
 // ========================================================================
 const rootElement = document.getElementById('root');
 if (rootElement) {
-  ReactDOM.render( // Use legacy render
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>,
-    rootElement
-  );
-} else {
-  console.error('Root element #root not found in the HTML.');
-}
+  ReactDOM.render( <React.StrictMode><App /></React.StrictMode>, rootElement );
+} else { console.error('Root element #root not found.'); }
 
 // ========================================================================
 // Inject CSS Keyframes and Class Styles
